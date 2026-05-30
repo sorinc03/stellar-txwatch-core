@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use chrono::Utc;
 use reqwest::Client;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -81,28 +80,6 @@ pub async fn send_webhook(
     Err(err)
 }
 
-/// Build a synthetic `AlertPayload` suitable for `test-webhook`.
-pub fn test_payload(label: &str, webhook_url: &str) -> AlertPayload {
-    AlertPayload {
-        label:            label.to_string(),
-        contract_id:      "CTEST000000000000000000000000000000000000000000000000000".into(),
-        network:          "testnet".into(),
-        rule_triggered:   "TestWebhook".into(),
-        transaction_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
-        function_name:    Some("test".into()),
-        amount_xlm:       None,
-        timestamp:        Utc::now().timestamp(),
-        horizon_link:     format!(
-            "https://horizon-testnet.stellar.org/transactions/\
-             0000000000000000000000000000000000000000000000000000000000000000"
-        ),
-        explorer_link:    "https://stellar.expert/explorer/testnet/tx/0000000000000000000000000000000000000000000000000000000000000000".into(),
-    }
-    // suppress unused webhook_url warning — callers use it to POST
-    // but we include it in the payload label for clarity
-    .with_label(format!("{} (test-webhook to {})", label, webhook_url))
-}
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -177,12 +154,5 @@ mod tests {
         let url = format!("{}/hook", server.uri());
         let result = send_webhook(&client, &url, &sample_payload(), None).await;
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_payload_builds_without_panic() {
-        let p = test_payload("My Contract", "https://example.com/hook");
-        assert!(p.label.contains("My Contract"));
-        assert_eq!(p.rule_triggered, "TestWebhook");
     }
 }

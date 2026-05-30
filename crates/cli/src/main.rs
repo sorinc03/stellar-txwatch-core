@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use clap::{Parser, Subcommand};
 use reqwest::Client;
 use tracing::info;
 use txwatch_config::AppConfig;
-use txwatch_notifier::{send_webhook, test_payload};
+use txwatch_notifier::send_webhook;
+use txwatch_rules::AlertPayload;
 
 // ── CLI definition ────────────────────────────────────────────────────────────
 
@@ -112,4 +114,39 @@ fn init_tracing() {
         )
         .with_target(false)
         .init();
+}
+
+/// Build a synthetic `AlertPayload` suitable for the CLI's `test-webhook`.
+fn test_payload(label: &str, webhook_url: &str) -> AlertPayload {
+    AlertPayload {
+        label:            label.to_string(),
+        contract_id:      "CTEST000000000000000000000000000000000000000000000000000".into(),
+        network:          "testnet".into(),
+        rule_triggered:   "TestWebhook".into(),
+        transaction_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
+        function_name:    Some("test".into()),
+        amount_xlm:       None,
+        timestamp:        Utc::now().timestamp(),
+        horizon_link:     format!(
+            "https://horizon-testnet.stellar.org/transactions/\
+             0000000000000000000000000000000000000000000000000000000000000000"
+        ),
+        explorer_link:    "https://stellar.expert/explorer/testnet/tx/0000000000000000000000000000000000000000000000000000000000000000".into(),
+    }
+    .with_label(format!("{} (test-webhook to {})", label, webhook_url))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_payload_includes_cli_webhook_context() {
+        let payload = test_payload("My Contract", "https://example.com/hook");
+
+        assert!(payload.label.contains("My Contract"));
+        assert!(payload.label.contains("https://example.com/hook"));
+        assert_eq!(payload.rule_triggered, "TestWebhook");
+        assert_eq!(payload.network, "testnet");
+    }
 }
