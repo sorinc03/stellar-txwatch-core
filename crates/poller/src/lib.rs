@@ -83,6 +83,14 @@ pub async fn run(cfg: AppConfig) -> Result<()> {
         "TxWatch polling engine started"
     );
 
+    for contract in &cfg.contracts {
+        info!(
+            horizon_base_url = %contract.network.horizon_base_url(),
+            "{}",
+            watch_startup_message(contract)
+        );
+    }
+
     // Spawn the summary logger task.
     let counters_clone = Arc::clone(&counters);
     tokio::spawn(async move {
@@ -231,6 +239,15 @@ async fn poll_contract(
     Ok((tx_count, alert_count))
 }
 
+fn watch_startup_message(contract: &WatchedContract) -> String {
+    format!(
+        "watching {} on {} ({})",
+        contract.label,
+        contract.network.as_str(),
+        contract.contract_id
+    )
+}
+
 // ── Soroban operation enrichment ──────────────────────────────────────────────
 
 async fn fetch_soroban_details(
@@ -275,6 +292,50 @@ async fn fetch_soroban_details(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use txwatch_config::{AlertRule, Network};
+
+    fn watched_contract(label: &str, network: Network, contract_id: &str) -> WatchedContract {
+        WatchedContract {
+            label: label.to_string(),
+            contract_id: contract_id.to_string(),
+            network,
+            rules: vec![AlertRule::AnyTransaction],
+            webhook_url: "https://example.com/hook".to_string(),
+            webhook_secret: None,
+        }
+    }
+
+    #[test]
+    fn startup_message_lists_label_network_and_contract_id() {
+        let contract = watched_contract(
+            "Treasury Vault",
+            Network::Mainnet,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        );
+
+        assert_eq!(
+            watch_startup_message(&contract),
+            "watching Treasury Vault on mainnet (CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA)"
+        );
+    }
+
+    #[test]
+    fn startup_log_can_include_horizon_base_url() {
+        let contract = watched_contract(
+            "Payments",
+            Network::Futurenet,
+            "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        );
+
+        assert_eq!(
+            contract.network.horizon_base_url(),
+            "https://horizon-futurenet.stellar.org"
+        );
+        assert_eq!(
+            watch_startup_message(&contract),
+            "watching Payments on futurenet (CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB)"
+        );
+    }
     use wiremock::matchers::{method, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
